@@ -393,9 +393,9 @@ async function startServer() {
   }
 
   const PORT = process.env.PORT || 3000;
-app.get('/google07e39b2a38760b76.html', (req, res) => {
-  res.send('google-site-verification: google07e39b2a38760b76.html');
-});
+  app.get('/google07e39b2a38760b76.html', (req, res) => {
+    res.send('google-site-verification: google07e39b2a38760b76.html');
+  });
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
   });
