@@ -1,0 +1,8 @@
+{
+  "name": "Remix Tâm An Học Đường - Tư Vấn Tâm Lý Học Sinh",
+  "description": "Không gian an toàn lắng nghe và tư vấn tâm lý học đường, gia đình, xã hội cho học sinh trung học. Hòm thư mật danh và chatbot AI đồng hành 24/7.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
