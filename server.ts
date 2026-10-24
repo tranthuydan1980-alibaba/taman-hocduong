@@ -379,14 +379,15 @@ app.post('/api/cheer', (req, res) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-        if (isProduction) {
+            if (isProduction) {
       app.use(express.static(path.join(__dirname, 'public')));
       app.use(express.static(path.resolve(__dirname, 'dist')));
       app.get('*', (_req, res) => {
         res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
       });
     }
-
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 app.get('/google07e39b2a38760b76.html', (_req, res) => {
@@ -398,3 +399,4 @@ app.listen(PORT, () => {
 });
 
 startServer();
+
