@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 app.use(express.json());
 // In-memory store for anonymous letters and community sharing
 interface CounselorReply {
@@ -387,5 +388,8 @@ async function startServer() {
       });
     }
   }
+  app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server đang chạy trên cổng ${PORT}`);
+
 
 
