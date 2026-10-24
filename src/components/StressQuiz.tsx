@@ -152,7 +152,7 @@ export const StressQuiz: React.FC<StressQuizProps> = ({
                     {/* Sharp realistic student photo with gradual dissolve fade at bottom */}
                     <div className="relative aspect-[16/9] w-full max-w-md mx-auto overflow-hidden">
                       <img
-                        src="/src/assets/images/real_student_study_1792402161478.jpg"
+                        src="/real_3.jpg"
                         alt="Học sinh nhẹ nhõm sau khi trút bỏ áp lực bài vở"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)]"

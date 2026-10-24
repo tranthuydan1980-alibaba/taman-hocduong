@@ -214,7 +214,7 @@ export const AnonymousMailbox: React.FC<AnonymousMailboxProps> = () => {
         <div className="mt-6 relative rounded-3xl overflow-hidden border border-sky-100 shadow-sm max-w-2xl mx-auto h-48 sm:h-56 group bg-sky-50 flex items-end p-5 sm:p-6">
           {/* Sharp, clear realistic photo */}
           <img
-            src="/src/assets/images/real_student_friends_1792402161964.jpg"
+            src="/real_2.jpg"
             alt="Các bạn học sinh cùng ngồi trò chuyện và đồng cảm dưới bóng cây trường học"
             referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover object-[50%_35%] group-hover:scale-[1.02] transition-transform duration-700"

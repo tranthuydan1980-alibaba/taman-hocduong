@@ -462,13 +462,13 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
                 {/* Sharp, crisp realistic photo with gradual dissolve fade at bottom */}
                 <div className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-5 bg-sky-50 border border-sky-100/80">
                   <img
-                    src={
-                      selectedCategory === 'school'
-                        ? '/src/assets/images/real_student_study_1792402161478.jpg'
-                        : selectedCategory === 'family'
-                        ? '/src/assets/images/real_family_talk_1792402161957.jpg'
-                        : '/src/assets/images/real_student_friends_1792402161964.jpg'
-                    }
+                             src={
+            selectedCategory === 'school'
+              ? '/real_3.jpg'
+              : selectedCategory === 'family'
+              ? '/real_1.jpg'
+              : '/real_2.jpg'
+          }
                     alt="Hình ảnh thực tế học sinh và không gian thấu cảm"
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)]"

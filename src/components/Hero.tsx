@@ -116,7 +116,7 @@ export const Hero: React.FC<HeroProps> = ({
           <div className="mt-8 relative rounded-3xl overflow-hidden border border-sky-100 shadow-md group">
             {/* Crisp, clear realistic photo of Vietnamese students */}
             <img
-              src="/src/assets/images/hero_students_real_1792402160495.jpg"
+              src="/hero_1.jpg"
               alt="Học sinh THPT Việt Nam vui vẻ gắn kết trong sân trường rợp bóng cây"
               referrerPolicy="no-referrer"
               className="w-full h-80 sm:h-96 md:h-[420px] object-cover object-[50%_25%] group-hover:scale-[1.01] transition-transform duration-700"
@@ -153,7 +153,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Realistic photo with gradual dissolve fade into the white card */}
             <div className="relative h-52 w-full overflow-hidden bg-sky-50">
               <img
-                src="/src/assets/images/real_student_study_1792402161478.jpg"
+                src="/real_3.jpg"
                 alt="Học sinh học tập bên bàn sách"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover object-center [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)] group-hover:scale-105 transition-transform duration-500"
@@ -196,7 +196,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Realistic photo with gradual dissolve fade into the white card */}
             <div className="relative h-52 w-full overflow-hidden bg-blue-50">
               <img
-                src="/src/assets/images/real_family_talk_1792402161957.jpg"
+                src="/real_1.jpg"
                 alt="Học sinh và cha mẹ trò chuyện trong phòng khách"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover object-center [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)] group-hover:scale-105 transition-transform duration-500"
@@ -239,7 +239,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Realistic photo with gradual dissolve fade into the white card */}
             <div className="relative h-52 w-full overflow-hidden bg-teal-50">
               <img
-                src="/src/assets/images/real_student_friends_1792402161964.jpg"
+                src="/real_2.jpg"
                 alt="Nhóm bạn học sinh chia sẻ và đồng cảm"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover object-center [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)] group-hover:scale-105 transition-transform duration-500"
