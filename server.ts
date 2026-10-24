@@ -12,7 +12,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
-
 // In-memory store for anonymous letters and community sharing
 interface CounselorReply {
   content: string;
@@ -386,10 +385,11 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, 'public')));
+        app.use(express.static(path.join(__dirname, 'public')));
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
     });
   }
 
