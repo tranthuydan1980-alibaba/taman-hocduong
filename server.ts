@@ -380,16 +380,19 @@ app.post('/api/cheer', (req, res) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-                            if (isProduction) {
-      app.use(express.static(path.join(__dirname, 'public')));
-      app.use(express.static(path.resolve(__dirname, 'dist')));
-      app.get('*', (_req, res) => {
-        res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-      });
-    }
+  if (isProduction) {
+    app.use(express.static(path.join(__dirname, 'public')));
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
   }
-  app.listen(PORT, '0.0.0.0', () => {
+}
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server đang chạy trên cổng ${PORT}`);
 });
+
+startServer();
 
 
