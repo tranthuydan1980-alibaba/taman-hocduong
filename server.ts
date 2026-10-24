@@ -379,28 +379,22 @@ app.post('/api/cheer', (req, res) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  if (!isProduction) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
-  } else {
-        app.use(express.static(path.join(__dirname, 'public')));
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
-    });
-  }
+        if (isProduction) {
+      app.use(express.static(path.join(__dirname, 'public')));
+      app.use(express.static(path.resolve(__dirname, 'dist')));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      });
+    }
 
-  const PORT = process.env.PORT || 3000;
-  app.get('/google07e39b2a38760b76.html', (req, res) => {
-    res.send('google-site-verification: google07e39b2a38760b76.html');
-  });
+
+const PORT = process.env.PORT || 3000;
+app.get('/google07e39b2a38760b76.html', (_req, res) => {
+  res.send('google-site-verification: google07e39b2a38760b76.html');
+});
+
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-  });
-}
+  console.log(`Server running at http://localhost:${PORT}`);
+});
 
 startServer();
