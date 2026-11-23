@@ -139,9 +139,9 @@ let lastError: unknown;
     if (params.systemInstruction) config.systemInstruction = params.systemInstruction;
     if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
     if (params.responseSchema) config.responseSchema = params.responseSchema;
-    if (params.thinkingLevel) {
-      config.thinkingConfig = { thinkingLevel: params.thinkingLevel };
-    }
+    //if (params.thinkingLevel) {
+      //config.thinkingConfig = { thinkingLevel: params.thinkingLevel };
+    //}
 
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
