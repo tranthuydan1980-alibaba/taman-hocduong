@@ -153,7 +153,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Realistic photo with gradual dissolve fade into the white card */}
             <div className="relative h-52 w-full overflow-hidden bg-sky-50">
               <img
-                src="/real_2.jpg"
+                src="/real_3.jpg"
                 alt="Học sinh học tập bên bàn sách"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover object-center [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)] group-hover:scale-105 transition-transform duration-500"
