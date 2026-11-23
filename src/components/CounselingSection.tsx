@@ -458,10 +458,10 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
                   <img
                     src={
                       selectedCategory === 'school'
-                        ? '/real_2.jpg'
+                        ? '/real_3.jpg'
                         : selectedCategory === 'family'
                         ? '/real_1.jpg'
-                        : '/real_3.jpg'
+                        : '/real_2.jpg'
                     }
                     alt="Hình ảnh thực tế học sinh và không gian thấu cảm"
                     referrerPolicy="no-referrer"
