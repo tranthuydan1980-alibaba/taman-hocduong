@@ -131,7 +131,7 @@ async function generateGeminiContent(
     responseSchema?: any;
   }
 ) {
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 let lastError: unknown;
 
   for (const model of modelsToTry) {
