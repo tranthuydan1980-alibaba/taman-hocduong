@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,10 +10,9 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 const app = express();
-const PORT = process.env.PORT || 10000;
 app.use(express.json());
+
 // In-memory store for anonymous letters and community sharing
 interface CounselorReply {
   content: string;
@@ -100,108 +99,262 @@ const anonymousLetters: AnonymousLetter[] = [
 
 // Helper to get GoogleGenAI client if API key is present
 function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     return null;
   }
-  return new GoogleGenAI();
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+function isQuotaExhaustedError(err: any): boolean {
+  const status = err?.status ?? err?.statusCode;
+  const msg = String(err?.message || '');
+  return status === 429 || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded');
+}
+
+// Smart Gemini caller: uses primary model (gemini-4-hydrogen), retries transient 5xx/network errors once,
+// and switches cleanly to gemini-3.1-flash-lite if free-tier daily quota (429) on the primary model is exhausted.
+async function generateGeminiContent(
+  ai: GoogleGenAI,
+  params: {
+    contents: any;
+    systemInstruction?: string;
+    thinkingLevel?: ThinkingLevel;
+    responseMimeType?: string;
+    responseSchema?: any;
+  }
+) {
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+let lastError: unknown;
+
+  for (const model of modelsToTry) {
+    const config: Record<string, any> = {};
+    if (params.systemInstruction) config.systemInstruction = params.systemInstruction;
+    if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
+    if (params.responseSchema) config.responseSchema = params.responseSchema;
+    if (params.thinkingLevel) {
+      config.thinkingConfig = { thinkingLevel: params.thinkingLevel };
+    }
+
+    for (let attempt = 0; attempt <= 1; attempt++) {
+      try {
+        return await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config,
+        });
+      } catch (err: any) {
+        lastError = err;
+        // If quota exhausted (429), immediately fall through to next model without wasting retries
+        if (isQuotaExhaustedError(err)) {
+          console.warn(`Model ${model} quota reached (429), switching fallback model if available.`);
+          break;
+        }
+        const status = err?.status ?? err?.statusCode;
+        const msg = String(err?.message || '').toLowerCase();
+        const isTransient =
+          (typeof status === 'number' && status >= 500) ||
+          msg.includes('timeout') ||
+          msg.includes('network') ||
+          msg.includes('econnreset') ||
+          msg.includes('unavailable');
+
+        if (isTransient && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 700));
+          continue;
+        }
+        // If thinkingConfig wasn't supported on fallback model, retry once without thinkingConfig
+        if (model !== 'gemini-2.5-flash' && config.thinkingConfig && status === 400) {
+          delete config.thinkingConfig;
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function getCategoryPsychologicalFramework(category: string): {
+  title: string;
+  clinicalLens: string;
+} {
+  if (category === 'family') {
+    return {
+      title: 'Tâm lý Gia đình & Mâu thuẫn thế hệ (Family Systems & Adolescent Autonomy)',
+      clinicalLens: `TRỤC TƯ VẤN GIA ĐÌNH — TƯ DUY LÂM SÀNG RIÊNG:
+- Phân biệt rạch ròi các tình huống:
+  (a) Khoảng cách thế hệ & giao tiếp lệch pha (cha mẹ thể hiện lo lắng bằng kiểm soát, kỳ vọng, so sánh "con nhà người ta");
+  (b) Áp đặt định hướng / tước quyền tự chủ tuổi mới lớn;
+  (c) Mâu thuẫn hôn nhân của cha mẹ / chiến tranh lạnh khiến con gánh cảm giác tội lỗi hoặc bất an kéo dài;
+  (d) Bạo lực thể chất / tinh thần nghiêm trọng hoặc bỏ mặc cảm xúc (TUYỆT ĐỐI KHÔNG khuyên học sinh "hãy thông cảm cho bố mẹ" nếu đang bị bạo hành/tổn thương nặng — phải ưu tiên ranh giới an toàn và người lớn bảo vệ).
+- Tùy cơ ứng biến theo từng câu chuyện:
+  * Nếu học sinh vừa cãi nhau hoặc đang ấm ức: ưu tiên hạ nhiệt cảm xúc và bảo vệ lòng tự tôn trước.
+  * Nếu học sinh muốn thay đổi cách nói chuyện với bố mẹ: viết sẵn 1–2 câu mở lời tự nhiên đúng giọng học sinh Việt Nam (I-message: "Con cảm thấy... khi...").
+  * Nếu hoàn cảnh gia đình khó thay đổi ngay: giúp học sinh xây dựng "vùng an toàn tâm lý" cho riêng mình thay vì ảo tưởng thay đổi cha mẹ trong một đêm.`
+    };
+  }
+
+  if (category === 'social') {
+    return {
+      title: 'Tâm lý Xã hội, Tình bạn & Tuổi vị thành niên (Peer Dynamics & Identity)',
+      clinicalLens: `TRỤC TƯ VẤN XÃ HỘI & BẠN BÈ — TƯ DUY LÂM SÀNG RIÊNG:
+- Phân biệt rạch ròi các tình huống:
+  (a) Cô lập, tẩy chay ngầm, rạn nứt bạn thân (relational aggression & rejection sensitivity);
+  (b) Tin đồn, nói xấu, bắt nạt qua mạng (cyberbullying / confession);
+  (c) Tự ti ngoại hình, áp lực đồng trang lứa (peer pressure), bẫy so sánh mạng xã hội;
+  (d) Rung động đầu đời, crush, chia tay, bối rối ranh giới tình cảm (TUYỆT ĐỐI KHÔNG xem nhẹ hay chê "còn nhỏ lo học đi").
+- Tùy cơ ứng biến theo từng câu chuyện:
+  * Nếu bị nói xấu/bắt nạt mạng: ưu tiên lưu bằng chứng, kiểm soát quyền riêng tư số, không đôi co cảm tính, và nhờ người lớn/nhà trường can thiệp đúng lúc.
+  * Nếu rạn nứt bạn thân: giúp em cân nhắc giữa việc hỏi thẳng một lần để gỡ hiểu lầm vs nhận diện tình bạn độc hại để bảo vệ lòng tự trọng.
+  * Nếu rung động/thất tình: công nhận vẻ đẹp của cảm xúc, hướng dẫn giữ nhịp sinh hoạt và tôn trọng ranh giới đôi bên.
+  * Nếu tự ti ngoại hình/FOMO mạng xã hội: bóc tách cơ chế lệch chuẩn trên mạng và xây dựng lại giá trị bản thân từ năng lực thực.`
+    };
+  }
+
+  return {
+    title: 'Tâm lý Học đường & Động lực học tập (Educational & Cognitive Psychology)',
+    clinicalLens: `TRỤC TƯ VẤN HỌC ĐƯỜNG — TƯ DUY LÂM SÀNG RIÊNG:
+- Phân biệt rạch ròi các tình huống:
+  (a) Học nhiều nhưng không hiệu quả / hổng kiến thức nền / ảo giác năng lực;
+  (b) Lo âu phòng thi (test anxiety: vào phòng thi quên sạch, tim đập nhanh dù ở nhà làm được);
+  (c) Kiệt sức học đường (academic burnout: mất ngủ, trống rỗng, chán nản toàn tập vì lịch học dày);
+  (d) Áp lực thành tích, tự ti trước bạn bè giỏi, hội chứng kẻ mạo danh (impostor feeling);
+  (e) Mâu thuẫn, ấm ức hoặc sợ hãi thầy cô;
+  (f) Mông lung định hướng chọn khối, chọn ngành, sợ tương lai.
+- Tùy cơ ứng biến theo từng câu chuyện:
+  * Bám sát đúng môn học, kỳ thi, giáo viên hoặc lịch sinh hoạt mà học sinh nhắc tới (nếu có).
+  * Không khuyên chung chung kiểu "cố gắng lên" hay "học chăm chỉ hơn" khi em ấy đang kiệt sức! Nếu em quá tải, ưu tiên cắt giảm và phục hồi não bộ; nếu em sợ trượt, ưu tiên chiến lược khoanh vùng điểm số và kiểm soát lo âu; nếu em mông lung chọn ngành, đưa ra bài tập tự khám phá thực tế.`
+  };
 }
 
 // 1. Endpoint: Consultation for 3 specific pillars (School, Family, Social)
 app.post('/api/consult', async (req, res) => {
+  const { category, topic, feeling, situation, penName, grade } = req.body;
+
+  if (!situation || !String(situation).trim()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Bạn hãy viết vài dòng chia sẻ cụ thể để chuyên gia AI có thể lắng nghe và phân tích đúng vấn đề nhé.'
+    });
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.status(503).json({
+      success: false,
+      error: 'Dịch vụ tư vấn AI chưa được cấu hình khóa kết nối. Vui lòng kiểm tra GEMINI_API_KEY trong phần Settings > Secrets.'
+    });
+  }
+
+  const framework = getCategoryPsychologicalFramework(category);
+
   try {
-    const { category, topic, feeling, situation, penName, grade } = req.body;
+    const systemInstruction = `Bạn là một Chuyên gia Tham vấn Tâm lý Học đường xuất sắc (trình độ Thạc sĩ Tâm lý Lâm sàng & Giáo dục), có khả năng tư duy độc lập, sắc bén, giàu trắc ẩn và am hiểu sâu sắc đời sống tinh thần của học sinh THCS & THPT Việt Nam (11–18 tuổi).
 
-    const categoryNames: Record<string, string> = {
-      school: 'Tâm lý học đường & thi cử',
-      family: 'Tâm lý gia đình & mâu thuẫn thế hệ',
-      social: 'Tâm lý xã hội, tình bạn & cảm xúc tuổi dậy thì'
-    };
+CHỦ ĐỀ TRỌNG TÂM HIỆN TẠI: ${framework.title}
+${framework.clinicalLens}
 
-    const targetCategory = categoryNames[category] || 'Tâm lý học đường';
+QUY TẮC SUY NGHĨ ĐỘC LẬP & TÙY CƠ ỨNG BIẾN (RẤT QUAN TRỌNG):
+1. ĐỌC SÂU TỪNG CHI TIẾT: Hãy tự đặt mình vào vị trí của chính học sinh có bút danh "${penName || 'em'}", đang học "${grade || 'cấp trung học'}", mang cảm xúc "${feeling || 'bối rối'}". Nhận diện những chi tiết nhỏ nhất trong lời kể (từ ngữ em dùng, mức độ tổn thương, nhân vật liên quan, mâu thuẫn cốt lõi, điều em chưa nói thành lời).
+2. KHÔNG TRẢ LỜI THEO KHUÔN MẪU SÁO RỖNG: Tuyệt đối tránh kiểu văn mẫu "Cô hiểu cảm giác của em... Điểm số không định nghĩa giá trị... Hãy uống nước ấm...". Mỗi câu chuyện phải có lập luận tâm lý riêng, giọng điệu uyển chuyển theo đúng mức độ cảm xúc (nhẹ nhàng nâng đỡ nếu em đang sụp đổ; sắc sảo, thực tế nếu em đang cần tháo gỡ kế hoạch; quyết liệt bảo vệ nếu em bị bắt nạt/bạo hành).
+3. PHẢN HỒI CÓ CHIỀU SÂU & ĐÚNG TRỌNG TÂM:
+   - "empathy" (1–2 đoạn văn, khoảng 4–6 câu tự nhiên, có xuống dòng \\n\\n giữa các ý): Không chỉ an ủi bề mặt, hãy gọi đúng tên nỗi đau/nút thắt ẩn sau lời kể của em ấy để em thấy mình được thấu hiểu tận gốc.
+   - "psychologicalInsight" (1–2 đoạn văn sâu sắc, có xuống dòng \\n\\n nếu cần): Tự phân tích cơ chế tâm lý đang diễn ra bên trong tình huống cụ thể này (tại sao tâm trí/cơ thể hoặc người kia lại phản ứng như vậy, đâu là nguyên nhân gốc rễ, và vì sao điều đó không phải lỗi đạo đức hay sự yếu kém của em).
+   - "actionSteps" (mảng từ 3 đến 5 bước hành động linh hoạt tùy độ phức tạp của vấn đề): Mỗi bước phải CỤ THỂ, ĐỜI THƯỜNG, ÁP DỤNG ĐƯỢC NGAY vào đúng vấn đề em kể (nên có tiêu đề ngắn mở đầu bước + hướng dẫn chi tiết, ví dụ câu thoại cụ thể, cách phân bổ thời gian, kỹ thuật xử lý tình huống). Không đưa lời khuyên chung chung sáo rỗng.
+   - "soothingQuote": Một thông điệp tự sáng tạo riêng cho đúng nỗi niềm của học sinh này (không dùng câu trích dẫn đại trà).
+   - "breathingReminder": Chọn kỹ thuật điều hòa thần kinh phù hợp nhất với trạng thái hiện tại của em (VD: Grounding 5-4-3-2-1 nếu đang hoảng loạn/sợ hãi, xả căng cơ vai-cổ nếu đang kiệt sức/ức chế, thở 4-4-6 nếu tim đập nhanh, viết nháp giải tỏa nếu đang tức giận/tủi thân).
+4. AN TOÀN KHỦNG HOẢNG: Nếu lời tâm sự có bất kỳ dấu hiệu tự hại, tuyệt vọng muốn kết thúc cuộc sống, hoặc bị bạo hành nghiêm trọng, PHẢI ưu tiên giữ an toàn lên hàng đầu và đưa rõ số Tổng đài Quốc gia Bảo vệ Trẻ em **111** (miễn phí 24/7) và Đường dây nóng **Ngày Mai 096 306 1414** ngay trong các bước hành động.`;
 
-    const systemPrompt = `Bạn là Chuyên gia Tâm lý Học đường giàu tình cảm, tinh tế, am hiểu sâu sắc tâm sinh lý lứa tuổi học sinh trung học cơ sở và trung học phổ thông (từ 11 - 18 tuổi) tại Việt Nam.
-Tôn chỉ tư vấn:
-1. Tuyệt đối KHÔNG phán xét, KHÔNG chỉ trích, KHÔNG so sánh hoặc giáo điều.
-2. Thể hiện sự thấu cảm sâu sắc, lắng nghe tích cực và công nhận cảm xúc của học sinh (Emotional Validation).
-3. Sử dụng đại từ xưng hô ấm áp: "Cô/Thầy" hoặc "Chuyên gia Tâm An" xưng với "Em" hoặc bút danh của học sinh, giọng văn ân cần, mềm mại, truyền cảm hứng tích cực.
-4. Cung cấp các gợi ý hành động cụ thể, dễ thực hiện (actionable steps), bài học tâm lý và lời khuyên khoa học.
-5. Luôn kết thúc bằng một câu thông điệp/khẳng định tích cực (Affirmation) xoa dịu tâm hồn học sinh.
+    const userMessage = `HỒ SƠ TÂM SỰ CẦN THAM VẤN CHUYÊN SÂU:
+- Bút danh học sinh: ${penName || 'Bạn học sinh giấu tên'}
+- Độ tuổi / Cấp lớp: ${grade || 'Cấp trung học'}
+- Lĩnh vực tâm sự: ${framework.title}
+- Chủ đề gợi ý đã chọn (nếu có): ${topic || 'Học sinh tự viết vấn đề riêng'}
+- Cảm xúc hiện tại của em: ${feeling || 'Chưa rõ'}
+- Toàn bộ lời tâm sự của học sinh:
+"""${String(situation).trim()}"""
 
-Yêu cầu xuất ra định dạng JSON thuần túy (không bọc codeblock markdown thừa nếu có thể, hoặc bọc \`\`\`json) với cấu trúc sau:
-{
-  "empathy": "Đoạn văn thấu cảm và vỗ về cảm xúc đầu tiên (3-4 câu êm dịu, ấm áp)",
-  "psychologicalInsight": "Phân tích tâm lý ngắn gọn, giải thích vì sao em lại cảm thấy như vậy và khẳng định đây là phản ứng bình thường của tuổi học trò",
-  "actionSteps": [
-    "Hành động cụ thể bước 1 (rất thực tế, làm được ngay)",
-    "Hành động cụ thể bước 2 (giao tiếp hoặc giải tỏa)",
-    "Hành động cụ thể bước 3 (chăm sóc bản thân dài hạn)"
-  ],
-  "soothingQuote": "Một câu nói truyền động lực hoặc xoa dịu tâm hồn ngắn gọn, sâu sắc",
-  "breathingReminder": "Một gợi ý ngắn về cách thư giãn tức thì (như uống một ngụm nước ấm, hít thở 3 nhịp sâu)"
-}`;
+Hãy suy nghĩ thật kỹ, phân tích đúng trọng tâm câu chuyện riêng này và trả về JSON theo schema.`;
 
-    const userMessage = `Học sinh: ${penName || 'Bạn học sinh giấu tên'}
-Đang học: ${grade || 'Cấp trung học'}
-Chủ đề tư vấn: ${targetCategory} - ${topic || 'Chung'}
-Cảm xúc hiện tại: ${feeling || 'Đang bối rối, lo âu'}
-Hoàn cảnh & Lời tâm sự:
-"""${situation}"""`;
-
-    const ai = getGeminiClient();
-    if (ai) {
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userMessage}` }] }
-          ],
-          config: {
-            responseMimeType: 'application/json'
+    const response = await generateGeminiContent(ai, {
+      contents: userMessage,
+      systemInstruction,
+      thinkingLevel: ThinkingLevel.HIGH,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          empathy: {
+            type: Type.STRING,
+            description: '1-2 đoạn thấu cảm sâu sắc (4-6 câu), gọi bút danh và chạm đúng nỗi niềm cụ thể của học sinh.'
+          },
+          psychologicalInsight: {
+            type: Type.STRING,
+            description: '1-2 đoạn phân tích tâm lý có chiều sâu, giải mã đúng gốc rễ cơ chế tâm lý của tình huống cụ thể này.'
+          },
+          actionSteps: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'Từ 3 đến 5 bước hành động linh hoạt, cụ thể, tùy cơ ứng biến theo đúng hoàn cảnh và nhân vật trong câu chuyện.'
+          },
+          soothingQuote: {
+            type: Type.STRING,
+            description: 'Một thông điệp xoa dịu sâu sắc, được viết riêng cho vấn đề này.'
+          },
+          breathingReminder: {
+            type: Type.STRING,
+            description: 'Kỹ thuật thư giãn / điều hòa cơ thể tức thì phù hợp nhất với trạng thái cảm xúc hiện tại.'
           }
-        });
-
-        const responseText = response.text || '';
-        try {
-          const parsed = JSON.parse(responseText);
-          return res.json({ success: true, advice: parsed });
-        } catch {
-          const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
-          const parsed = JSON.parse(cleaned);
-          return res.json({ success: true, advice: parsed });
-        }
-      } catch (aiErr) {
-        console.warn('Gemini generateContent error in consult, providing empathetic fallback:', aiErr);
+        },
+        required: ['empathy', 'psychologicalInsight', 'actionSteps', 'soothingQuote', 'breathingReminder']
       }
+    });
+
+    const responseText = (response.text ?? '').trim();
+    if (!responseText) {
+      throw new Error('Phản hồi từ AI bị trống.');
     }
 
-    // High quality therapeutic fallback response ensuring students always receive warm advice
-    const fallbackAdvice = {
-      empathy: `Chào ${penName || 'bạn học sinh thân mến'}, cô/thầy lắng nghe và cảm nhận được rằng em đang phải trải qua một giai đoạn rất nhiều áp lực và trăn trở trong lòng. Việc em dám viết ra những dòng này đã là một bước dũng cảm rất lớn rồi.`,
-      psychologicalInsight: `Ở lứa tuổi học sinh, não bộ và cảm xúc của chúng ta đang phát triển mạnh mẽ. Những xung đột hay sự bế tắc trong ${targetCategory.toLowerCase()} là điều mà rất nhiều bạn đồng trang lứa cũng từng trải qua. Em không hề đơn độc hay bất bình thường.`,
-      actionSteps: [
-        'Dành ra 10 phút tạm dừng suy nghĩ, làm một việc nhẹ nhàng khiến em thấy an toàn (nghe một bản nhạc êm dịu, uống nước ấm, hít thở sâu).',
-        'Tách biệt vấn đề ra khỏi giá trị bản thân: Nhớ rằng khó khăn này chỉ là một thử thách tạm thời, không phải là toàn bộ tương lai hay con người em.',
-        'Tìm một người đáng tin cậy (bạn thân, thầy cô phụ trách tâm lý, hoặc tiếp tục tâm sự với chuyên gia Tâm An) để không phải chịu đựng một mình.'
-      ],
-      soothingQuote: 'Mọi cơn bão rồi cũng sẽ qua, sau cơn mưa trời lại sáng. Hãy kiên nhẫn và dịu dàng với chính bản thân mình.',
-      breathingReminder: 'Hãy thả lỏng hai vai, nhắm mắt lại và hít một hơi thật sâu trong 4 giây, sau đó thở ra từ từ nhé.'
-    };
-    return res.json({ success: true, advice: fallbackAdvice });
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+
+    if (!parsed || !parsed.empathy || !Array.isArray(parsed.actionSteps)) {
+      throw new Error('Cấu trúc phản hồi AI chưa đầy đủ.');
+    }
+
+    return res.json({ success: true, advice: parsed });
   } catch (error: any) {
-    console.error('Error in /api/consult:', error);
-    return res.json({
-      success: true,
-      advice: {
-        empathy: 'Tâm An luôn ở đây với bạn. Mình cảm nhận được nỗi niềm trăn trở của bạn lúc này.',
-        psychologicalInsight: 'Mọi cảm xúc buồn lo hay bế tắc đều là phản ứng tự nhiên của tâm lý khi gặp áp lực cuộc sống.',
-        actionSteps: [
-          'Hít thở sâu 3 nhịp để điều hòa nhịp tim.',
-          'Uống một cốc nước ấm và nghỉ ngơi 15 phút.',
-          'Viết ra những điều nhỏ em có thể làm ngay hôm nay.'
-        ],
-        soothingQuote: 'Bạn luôn có giá trị và bạn dũng cảm hơn bạn tưởng rất nhiều.'
-      }
+    const status = error?.status ?? error?.statusCode;
+    console.warn('Consult endpoint issue:', status || error?.message || 'Unknown error');
+    if (isQuotaExhaustedError(error)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Hạn mức miễn phí của Gemini API hôm nay đã hết tạm thời. Bạn có thể đợi vài phút hoặc chọn API key có bật thanh toán trong Settings > Secrets để tăng hạn mức nhé!'
+      });
+    }
+    if (status === 403 || status === 400) {
+      return res.status(status).json({
+        success: false,
+        error: 'Khóa API Gemini không hợp lệ hoặc chưa đủ quyền. Vui lòng kiểm tra lại trong Settings > Secrets.'
+      });
+    }
+    return res.status(502).json({
+      success: false,
+      error: 'Không thể kết nối tới chuyên gia AI ngay lúc này. Em hãy bấm gửi lại sau vài giây nhé!'
     });
   }
 });
@@ -209,52 +362,56 @@ Hoàn cảnh & Lời tâm sự:
 // 2. Endpoint: 24/7 Chatbot "Tâm An"
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
-  const lastUserMsg = messages?.[messages.length - 1]?.text?.toLowerCase() || '';
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.status(503).json({
+      success: false,
+      error: 'Trợ lý AI chưa sẵn sàng do thiếu GEMINI_API_KEY trong phần Settings > Secrets.'
+    });
+  }
 
   try {
-    const systemInstruction = `Bạn là "Tâm An" - Trợ lý Tâm lý Học đường AI túc trực 24/7 dành riêng cho học sinh cấp 2 và cấp 3 (THCS & THPT) tại Việt Nam.
-Tính cách:
-- Cực kỳ ân cần, dịu dàng, lắng nghe kiên nhẫn, nói chuyện tự nhiên và gần gũi như một người anh/chị khóa trên hoặc cô thủ thư tâm lý tốt bụng.
-- Sử dụng xưng hô: "Tâm An" (hoặc "mình") và gọi học sinh là "bạn" hoặc "em".
-- Câu từ ngắn gọn, súc tích, có nhịp điệu nhẹ nhàng, nhiều năng lượng chữa lành, dùng icon như 🌿, ☁️, 💙, ✨, 🌸.
-- Khi học sinh buồn, hãy an ủi trước, không vội đưa ra bài học.
-- NẾU PHÁT HIỆN HỌC SINH CÓ DẤU HIỆU NGUY CẤP (tự hại): Luôn bày tỏ sự quan tâm chân thành và cung cấp ngay Tổng đài Quốc gia Bảo vệ Trẻ em 111, hoặc Tổng đài Ngày Mai 096 306 1414.`;
+    const systemInstruction = `Bạn là "Tâm An" - Chuyên viên Tham vấn Tâm lý Học đường AI túc trực 24/7 dành riêng cho học sinh THCS & THPT (11–18 tuổi) tại Việt Nam.
+Phong cách trò chuyện & Tư duy sâu:
+- Lắng nghe linh hoạt, tùy cơ ứng biến theo đúng từng câu chuyện về Học đường, Gia đình hay Xã hội/Bạn bè. Tuyệt đối KHÔNG trả lời theo 1-2 mẫu câu rập khuôn.
+- Biết phân tích tinh tế điều học sinh đang thật sự cần ở mỗi lượt chat: khi mới chia sẻ nỗi đau hãy thấu cảm và đặt 1 câu hỏi mở nhẹ nhàng để hiểu sâu hơn; khi học sinh hỏi cách xử lý hãy đưa ra gợi ý sắc sảo, thực tế, dễ làm.
+- Xưng hô gần gũi ("Tâm An" / "mình" và gọi học sinh là "bạn" hoặc "em" tùy cách học sinh xưng).
+- Ngôn từ tự nhiên, chân thành, có chiều sâu tâm lý nhưng không khô khan sách vở, dùng biểu tượng tiết chế vừa đủ (🌿, 💙, ✨).
+- NẾU PHÁT HIỆN HỌC SINH CÓ DẤU HIỆU TỰ HẠI HOẶC BỊ BẠO HÀNH NGHIÊM TRỌNG: Ưu tiên bảo vệ an toàn và cung cấp ngay Tổng đài Quốc gia Bảo vệ Trẻ em 111 (miễn phí 24/7) và Đường dây nóng Ngày Mai 096 306 1414.`;
 
-    const ai = getGeminiClient();
-    if (ai) {
-      const contents = (messages || []).map((m: any) => ({
-        role: m.role === 'assistant' ? 'model' : m.role,
-        parts: [{ text: m.text }]
-      }));
+    const contents = (messages || []).map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : m.role,
+      parts: [{ text: m.text }]
+    }));
 
-      if (contents.length === 0) {
-        contents.push({ role: 'user', parts: [{ text: 'Chào Tâm An!' }] });
-      }
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: { systemInstruction }
-      });
-
-      if (response.text) {
-        return res.json({ success: true, reply: response.text });
-      }
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: 'Chào Tâm An!' }] });
     }
-  } catch (error: any) {
-    console.warn('Gemini chat error, fallbacking gracefully:', error?.message || error);
-  }
 
-  // Graceful compassionate reply
-  let reply = 'Tâm An luôn ở đây lắng nghe bạn nè 💙. Bạn đang cảm thấy thế nào, có điều gì làm bạn trăn trở trong học tập, bạn bè hay gia đình không? Cứ thoải mái chia sẻ với mình nhé, không gian này hoàn toàn an toàn và bí mật!';
-  if (lastUserMsg.includes('buồn') || lastUserMsg.includes('khóc') || lastUserMsg.includes('áp lực') || lastUserMsg.includes('điểm')) {
-    reply = 'Thương bạn nhiều 🫂. Mình biết lúc này bạn đang mệt mỏi và nặng trĩu trong lòng. Điểm số hay một bài kiểm tra không định nghĩa giá trị con người bạn đâu. Hãy cho phép bản thân nghỉ ngơi một chút, uống một ngụm nước ấm và thở sâu 3 nhịp nhé. Mình vẫn đang ở đây cùng bạn!';
-  } else if (lastUserMsg.includes('thở') || lastUserMsg.includes('relax') || lastUserMsg.includes('bài tập')) {
-    reply = 'Cùng Tâm An thử bài tập hít thở dịu tâm nhé 🌿: Hít vào bằng mũi trong 4 giây... Giữ hơi lại trong 4 giây... Và thở ra nhẹ nhàng bằng miệng trong 6 giây. Bạn có thể mở mục "Thở Thư Giãn" trên thanh menu để tập theo vòng tròn nhịp điệu nhé!';
-  } else if (lastUserMsg.includes('mẹ') || lastUserMsg.includes('bố') || lastUserMsg.includes('gia đình')) {
-    reply = 'Khoảng cách thế hệ với cha mẹ thực sự là một điều rất khó khăn với tuổi học trò chúng mình. Bố mẹ thương bạn nhưng đôi khi cách thể hiện vụng về gây tổn thương. Bạn cứ kể chi tiết hơn cho mình nghe nhé 💙.';
+    const response = await generateGeminiContent(ai, {
+      contents,
+      systemInstruction,
+      thinkingLevel: ThinkingLevel.MEDIUM
+    });
+
+    if (response.text) {
+      return res.json({ success: true, reply: response.text });
+    }
+    throw new Error('Empty reply from AI');
+  } catch (error: any) {
+    console.warn('Gemini chat issue:', error?.status || error?.message || 'Unknown error');
+    if (isQuotaExhaustedError(error)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Hạn mức miễn phí của Gemini API hôm nay đã hết tạm thời. Bạn có thể đợi ít phút hoặc dùng khóa API trả phí trong Settings > Secrets nhé!'
+      });
+    }
+    return res.status(502).json({
+      success: false,
+      error: 'Kết nối với Tâm An 24/7 đang chập chờn. Bạn vui lòng gửi lại tin nhắn sau giây lát nhé!'
+    });
   }
-  return res.json({ success: true, reply });
 });
 
 // 3. Endpoint: Anonymous Secret Letter submission
@@ -292,25 +449,24 @@ Tiêu đề: ${title}
 Nội dung bức thư:
 """${content}"""
 
-Hãy viết một bức thư phản hồi thật ấm áp, sâu sắc, tử tế, thấu hiểu, dài khoảng 3-4 đoạn văn.
+Hãy viết một bức thư phản hồi thật ấm áp, sâu sắc, tử tế, thấu hiểu, bám sát từng chi tiết câu chuyện riêng của học sinh, dài khoảng 3-4 đoạn văn.
 Cấu trúc:
 - Chào bạn với bút danh đáng yêu
-- Lắng nghe và xoa dịu cảm xúc tổn thương/lo lắng
-- Phân tích vấn đề một cách khách quan, nhẹ nhàng và đưa ra định hướng giải pháp
+- Lắng nghe và xoa dịu cảm xúc tổn thương/lo lắng gắn với sự việc cụ thể
+- Phân tích vấn đề một cách khách quan, nhẹ nhàng và đưa ra định hướng giải pháp thực tế
 - Lời chúc và nhắc nhở em luôn được yêu thương, ký tên ${chosenCounselor.name}.`;
 
-        const replyRes = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        const replyRes = await generateGeminiContent(ai, {
+          contents: prompt
         });
         counselorReplyContent = replyRes.text || '';
-      } catch (e) {
-        console.warn('AI reply generation failed, fallbacking:', e);
+      } catch (e: any) {
+        console.warn('AI letter reply generation failed:', e?.status || e?.message || 'Unknown error');
       }
     }
 
     if (!counselorReplyContent) {
-      counselorReplyContent = `Gửi ${penName || 'bạn học sinh thân mến'},\n\nCô đã nhận được bức thư tâm sự của em và rất trân trọng niềm tin mà em đã trao gửi vào Hòm thư Tâm An. Những nỗi niềm mà em đang giữ kín trong lòng thật không dễ dàng chút nào.\n\nHãy nhớ rằng, không có cảm xúc nào là sai trái, và em hoàn toàn có quyền được yếu lòng. Những khó khăn này đang rèn giũa em trở nên kiên cường hơn, nhưng em không phải vượt qua nó một mình. Hãy cho bản thân thời gian để nghỉ ngơi, từng bước tháo gỡ vấn đề nhé.\n\nChúc em luôn giữ được sự an yên trong tâm hồn!\nThân mến,\n${chosenCounselor.name} - ${chosenCounselor.title}`;
+      counselorReplyContent = `Gửi ${penName || 'bạn học sinh thân mến'},\n\nCô đã nhận được bức thư "${title}" của em và rất trân trọng niềm tin mà em đã trao gửi vào Hòm thư Tâm An. Những nỗi niềm mà em đang giữ kín trong lòng thật không dễ dàng chút nào.\n\nHãy nhớ rằng, không có cảm xúc nào là sai trái, và em hoàn toàn có quyền được yếu lòng. Những khó khăn này đang rèn giũa em trở nên kiên cường hơn, nhưng em không phải vượt qua nó một mình. Hãy cho bản thân thời gian để nghỉ ngơi, từng bước tháo gỡ vấn đề nhé.\n\nChúc em luôn giữ được sự an yên trong tâm hồn!\nThân mến,\n${chosenCounselor.name} - ${chosenCounselor.title}`;
     }
 
     const newLetter: AnonymousLetter = {
@@ -380,19 +536,23 @@ app.post('/api/cheer', (req, res) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  if (isProduction) {
-    app.use(express.static(path.join(__dirname, 'public')));
+  if (!isProduction) {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa'
+    });
+    app.use(vite.middlewares);
+  } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
+
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server đang chạy trên cổng ${PORT}`);
-});
-
 startServer();
-
-
