@@ -1,50 +1,123 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Wind, Heart, Sparkles, Volume2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Wind, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import { soundEngine } from '../utils/audio';
+
+type BreathingPhase = 'inhale' | 'hold' | 'exhale' | 'pause';
+
+const PHASES: Record<
+  BreathingPhase,
+  {
+    label: string;
+    duration: number;
+    next: BreathingPhase;
+    color: string;
+    ring: string;
+  }
+> = {
+  inhale: {
+    label: 'Hít vào nhẹ nhàng bằng mũi',
+    duration: 4,
+    next: 'hold',
+    color: 'text-sky-600',
+    ring: 'scale-125 border-sky-400 bg-sky-100/60',
+  },
+  hold: {
+    label: 'Giữ hơi và thả lỏng hai vai',
+    duration: 4,
+    next: 'exhale',
+    color: 'text-blue-600',
+    ring: 'scale-125 border-blue-400 bg-blue-100/60',
+  },
+  exhale: {
+    label: 'Thở ra chậm rãi qua miệng',
+    duration: 6,
+    next: 'pause',
+    color: 'text-teal-600',
+    ring: 'scale-90 border-teal-300 bg-teal-50/40',
+  },
+  pause: {
+    label: 'Nghỉ ngơi và cảm nhận lồng ngực',
+    duration: 2,
+    next: 'inhale',
+    color: 'text-indigo-600',
+    ring: 'scale-100 border-indigo-200 bg-indigo-50/30',
+  },
+};
 
 export const BreathingExercise: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
-  const [phase, setPhase] = useState<'inhale' | 'hold' | 'exhale' | 'pause'>('inhale');
-  const [secondsLeft, setSecondsLeft] = useState(4);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [phase, setPhase] = useState<BreathingPhase>('inhale');
+  const [secondsLeft, setSecondsLeft] = useState(PHASES.inhale.duration);
   const [cyclesCompleted, setCyclesCompleted] = useState(0);
+  const [justCelebrated, setJustCelebrated] = useState(false);
 
-  // 4-7-8 Breathing Technique for calming nervous system
-  // Inhale: 4s, Hold: 7s (or 4s for beginners), Exhale: 8s (or 6s)
-  const PHASES = {
-    inhale: { label: 'Hít vào nhẹ nhàng bằng mũi', duration: 4, next: 'hold' as const, color: 'text-sky-600', ring: 'scale-125 border-sky-400 bg-sky-100/60' },
-    hold: { label: 'Giữ hơi và thả lỏng hai vai', duration: 4, next: 'exhale' as const, color: 'text-blue-600', ring: 'scale-125 border-blue-400 bg-blue-100/60' },
-    exhale: { label: 'Thở ra chậm rãi qua miệng', duration: 6, next: 'pause' as const, color: 'text-teal-600', ring: 'scale-90 border-teal-300 bg-teal-50/40' },
-    pause: { label: 'Nghỉ ngơi và cảm nhận lồng ngực', duration: 2, next: 'inhale' as const, color: 'text-indigo-600', ring: 'scale-100 border-indigo-200 bg-indigo-50/30' },
-  };
+  const phaseRef = useRef<BreathingPhase>(phase);
+  const secondsRef = useRef<number>(secondsLeft);
+  phaseRef.current = phase;
+  secondsRef.current = secondsLeft;
 
+  // Manage gentle cheerful background music based on active & musicEnabled state
   useEffect(() => {
-    let timer: any = null;
-    if (isActive) {
-      timer = setInterval(() => {
-        setSecondsLeft((prev) => {
-          if (prev <= 1) {
-            const nextPhase = PHASES[phase].next;
-            setPhase(nextPhase);
-            if (nextPhase === 'inhale') {
-              setCyclesCompleted((c) => c + 1);
-            }
-            soundEngine.playCalmBell();
-            return PHASES[nextPhase].duration;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (isActive && musicEnabled) {
+      soundEngine.startBreathingMusic();
     } else {
-      clearInterval(timer);
+      soundEngine.stopBreathingMusic();
     }
-    return () => clearInterval(timer);
-  }, [isActive, phase]);
+    return () => {
+      soundEngine.stopBreathingMusic();
+    };
+  }, [isActive, musicEnabled]);
+
+  // Breathing timer loop (side-effects safely outside React state updaters)
+  useEffect(() => {
+    if (!isActive) return;
+
+    const timer = window.setInterval(() => {
+      if (secondsRef.current <= 1) {
+        const nextPhase = PHASES[phaseRef.current].next;
+        const nextDuration = PHASES[nextPhase].duration;
+
+        phaseRef.current = nextPhase;
+        secondsRef.current = nextDuration;
+        setPhase(nextPhase);
+        setSecondsLeft(nextDuration);
+
+        if (nextPhase === 'inhale') {
+          // Completed 1 full breathing cycle!
+          setCyclesCompleted((c) => c + 1);
+          setJustCelebrated(true);
+          soundEngine.playCelebrationChime();
+          window.setTimeout(() => setJustCelebrated(false), 3000);
+        } else {
+          soundEngine.playSoftPhaseCue(nextPhase);
+        }
+      } else {
+        const nextSec = secondsRef.current - 1;
+        secondsRef.current = nextSec;
+        setSecondsLeft(nextSec);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isActive]);
+
+  const handleTogglePlay = () => {
+    if (!isActive) {
+      soundEngine.playSoftPhaseCue(phase);
+    }
+    setIsActive((prev) => !prev);
+  };
 
   const handleReset = () => {
     setIsActive(false);
+    soundEngine.stopBreathingMusic();
+    phaseRef.current = 'inhale';
+    secondsRef.current = PHASES.inhale.duration;
     setPhase('inhale');
     setSecondsLeft(PHASES.inhale.duration);
     setCyclesCompleted(0);
+    setJustCelebrated(false);
   };
 
   const currentPhaseInfo = PHASES[phase];
@@ -58,14 +131,14 @@ export const BreathingExercise: React.FC = () => {
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold border border-sky-200 mb-3">
           <Wind className="w-3.5 h-3.5" />
-          <span>Kỹ Thuật Thở 4-4-6 Xoa Dịu Hệ Thần Kinh</span>
+          <span>Kỹ Thuật Thở 4-4-6 Kết Hợp Nhạc Thư Giãn Nhẹ Nhàng</span>
         </div>
 
         <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800">
           Góc Thở Bình Yên
         </h3>
         <p className="mt-2 text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
-          Khi cảm thấy tim đập nhanh, hoảng sợ trước giờ thi hoặc nghẹn ngào vì buồn tủi, hãy dành 2 phút cùng bài tập thở này nhé.
+          Khi cảm thấy tim đập nhanh, hoảng sợ trước giờ thi hoặc nghẹn ngào vì buồn tủi, hãy dành 2 phút cùng bài tập thở và giai điệu nhẹ nhàng, vui tươi này nhé.
         </p>
 
         {/* Visual Breathing Ring */}
@@ -80,9 +153,11 @@ export const BreathingExercise: React.FC = () => {
             />
 
             {/* Inner Content Bubble */}
-            <div className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-full bg-white shadow-xl shadow-sky-100 border border-sky-100 flex flex-col items-center justify-center p-4 transition-all duration-700">
+            <div className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-full bg-white shadow-xl border flex flex-col items-center justify-center p-4 transition-all duration-700 ${
+              justCelebrated ? 'border-emerald-300 shadow-emerald-100 scale-105' : 'border-sky-100 shadow-sky-100'
+            }`}>
               <span className="text-3xl mb-1">
-                {phase === 'inhale' ? '🌸' : phase === 'hold' ? '✨' : phase === 'exhale' ? '🍃' : '💙'}
+                {justCelebrated ? '🎉' : phase === 'inhale' ? '🌸' : phase === 'hold' ? '✨' : phase === 'exhale' ? '🍃' : '💙'}
               </span>
               <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${currentPhaseInfo.color}`}>
                 {isActive ? `${secondsLeft}s` : 'Bắt đầu'}
@@ -96,12 +171,9 @@ export const BreathingExercise: React.FC = () => {
         </div>
 
         {/* Control Buttons */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <button
-            onClick={() => {
-              if (!isActive) soundEngine.playCalmBell();
-              setIsActive(!isActive);
-            }}
+            onClick={handleTogglePlay}
             className={`px-6 py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer ${
               isActive 
                 ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200' 
@@ -113,6 +185,19 @@ export const BreathingExercise: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setMusicEnabled((prev) => !prev)}
+            className={`px-4 py-3 rounded-2xl font-semibold text-xs flex items-center gap-1.5 border transition-all cursor-pointer ${
+              musicEnabled
+                ? 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100'
+                : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+            }`}
+            title={musicEnabled ? 'Tắt nhạc nền vui tươi' : 'Bật nhạc nền nhẹ nhàng, vui tươi'}
+          >
+            {musicEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span>{musicEnabled ? 'Nhạc nhẹ nhàng: Bật' : 'Nhạc nền: Tắt'}</span>
+          </button>
+
+          <button
             onClick={handleReset}
             className="p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all cursor-pointer"
             title="Làm lại từ đầu"
@@ -121,11 +206,17 @@ export const BreathingExercise: React.FC = () => {
           </button>
         </div>
 
-        {/* Counter of cycles */}
+        {/* Counter of cycles with celebration feedback */}
         {cyclesCompleted > 0 && (
-          <div className="mt-5 text-xs text-emerald-700 font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
-            <Sparkles className="w-4 h-4 text-emerald-500" />
-            <span>Tuyệt vời! Bạn đã hoàn thành {cyclesCompleted} chu kỳ thở rồi. Cơ thể bạn đang thư giãn hơn đấy!</span>
+          <div className={`mt-5 text-xs font-semibold flex items-center justify-center gap-1.5 px-4 py-2 rounded-2xl mx-auto w-fit transition-all ${
+            justCelebrated
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 scale-105 shadow-xs'
+              : 'text-emerald-700'
+          }`}>
+            <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>
+              Chúc mừng! Bạn đã hoàn thành {cyclesCompleted} chu kỳ thở rồi. Cơ thể và tâm trí bạn đang nhẹ nhàng, thư thái hơn đấy!
+            </span>
           </div>
         )}
 

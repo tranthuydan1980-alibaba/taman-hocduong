@@ -90,23 +90,11 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
       if (data.success && data.advice) {
         setAdviceResult(data.advice);
       } else {
-        throw new Error(data.error || 'Không nhận được phản hồi');
+        setErrorMsg(data.error || 'Không thể kết nối tới chuyên gia AI lúc này. Bạn vui lòng bấm gửi lại nhé!');
       }
     } catch (err: any) {
-      console.warn('API error, using client-side empathetic fallback:', err);
-      // Compassionate client-side fallback if server route had network glitch
-      const fallbackAdvice: AdviceResult = {
-        empathy: `Gửi ${penName}, cô cảm nhận được sâu sắc nỗi băn khoăn và mệt mỏi mà em đang gánh chịu. Những gì em đang đối mặt không hề dễ dàng, và em hoàn toàn có quyền được buồn hoặc lo âu.`,
-        psychologicalInsight: `Ở lứa tuổi học sinh, não bộ đang tái cấu trúc và hormone thay đổi khiến cảm xúc nhạy cảm hơn bình thường. Những vấn đề về ${currentCategory.shortTitle.toLowerCase()} này là thử thách phổ biến, không phải lỗi do em yếu kém.`,
-        actionSteps: [
-          'Dừng lại mọi suy nghĩ tiêu cực trong 10 phút, uống một ngụm nước ấm và rửa mặt bằng nước mát.',
-          'Ghi ra giấy 3 điều em đang kiểm soát được (như việc sắp xếp lại bàn học, làm từng bài tập nhỏ) và buông bớt những điều ngoài tầm kiểm soát.',
-          'Chia sẻ cởi mở với một người em tin cậy hoặc tiếp tục trò chuyện với chatbot 24/7 để trút bớt gánh nặng.'
-        ],
-        soothingQuote: 'Bạn không phải đối mặt với mọi thứ một mình. Từng bước nhỏ một, mọi chuyện rồi sẽ ổn thôi.',
-        breathingReminder: 'Hít sâu 4 giây... Giữ hơi 4 giây... Và thở ra nhẹ nhàng 6 giây nhé!'
-      };
-      setAdviceResult(fallbackAdvice);
+      console.error('Consult API network error:', err);
+      setErrorMsg('Kết nối tới máy chủ đang bị gián đoạn. Bạn kiểm tra mạng và bấm gửi lại để nhận phân tích từ chuyên gia AI nhé!');
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +138,9 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
                 key={catId}
                 onClick={() => {
                   onSelectCategory(catId);
+                  setSelectedTopic('');
                   setAdviceResult(null);
+                  setErrorMsg(null);
                 }}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap ${
                   isCurrent
@@ -307,7 +297,11 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
               <textarea
                 rows={6}
                 value={situation}
-                onChange={(e) => setSituation(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSituation(val);
+                  if (!val.trim()) setSelectedTopic('');
+                }}
                 placeholder="Hãy viết ra mọi điều đang chất chứa trong lòng bạn... Không có điều gì là ngốc nghếch hay sai trái cả. Tâm An luôn ở đây sẵn sàng lắng nghe bạn."
                 className="w-full p-4 rounded-2xl bg-sky-50/30 border border-sky-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white transition-all resize-y"
               />
@@ -402,16 +396,16 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
               <div className="text-xs sm:text-sm text-slate-700 leading-relaxed">
                 <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs mb-1">
                   <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Góc nhìn tâm lý học đường:</span>
+                  <span>Góc nhìn tâm lý chuyên sâu:</span>
                 </div>
-                <p>{adviceResult.psychologicalInsight}</p>
+                <p className="whitespace-pre-line">{adviceResult.psychologicalInsight}</p>
               </div>
 
               {/* 3. Action Steps */}
               <div>
                 <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs mb-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>3 Bước hành động gợi ý nhẹ nhàng:</span>
+                  <span>Gợi ý hành động phù hợp với bạn:</span>
                 </div>
                 <div className="space-y-2">
                   {adviceResult.actionSteps.map((step, idx) => (
@@ -422,7 +416,7 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
                       <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">
                         {idx + 1}
                       </span>
-                      <span>{step}</span>
+                      <span className="whitespace-pre-line leading-relaxed">{step}</span>
                     </div>
                   ))}
                 </div>
@@ -462,13 +456,13 @@ export const CounselingSection: React.FC<CounselingSectionProps> = ({
                 {/* Sharp, crisp realistic photo with gradual dissolve fade at bottom */}
                 <div className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-5 bg-sky-50 border border-sky-100/80">
                   <img
-                             src={
-            selectedCategory === 'school'
-              ? '/real_3.jpg'
-              : selectedCategory === 'family'
-              ? '/real_1.jpg'
-              : '/real_2.jpg'
-          }
+                    src={
+                      selectedCategory === 'school'
+                        ? '/real_1.jpg'
+                        : selectedCategory === 'family'
+                        ? '/real_2.jpg'
+                        : '/real_3.jpg'
+                    }
                     alt="Hình ảnh thực tế học sinh và không gian thấu cảm"
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover [mask-image:linear-gradient(to_bottom,black_45%,rgba(0,0,0,0.85)_65%,rgba(0,0,0,0.3)_85%,transparent_100%)]"

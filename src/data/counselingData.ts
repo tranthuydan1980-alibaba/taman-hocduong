@@ -181,7 +181,7 @@ export const EMERGENCY_HOTLINES = [
 export const STRESS_QUIZ_QUESTIONS: QuizQuestion[] = [
   {
     id: 1,
-    question: 'Trong 7 ngày qua, bạn có thường cảm thấy khó thư giãn hoặc bồn chồn không?',
+    question: 'Trong 7 ngày qua, bạn có thường cảm thấy khó thư giãn, bồn chồn hoặc đứng ngồi không yên không?',
     options: [
       { label: 'Hầu như không bao giờ', points: 0 },
       { label: 'Thỉnh thoảng (1-2 ngày)', points: 1 },
@@ -201,7 +201,7 @@ export const STRESS_QUIZ_QUESTIONS: QuizQuestion[] = [
   },
   {
     id: 3,
-    question: 'Khi ở nhà hoặc ở trường, bạn có cảm giác dễ cáu gắt hoặc muốn ở một mình không?',
+    question: 'Khi ở nhà hoặc ở trường, bạn có cảm giác dễ cáu gắt, nóng nảy hoặc muốn thu mình lại không?',
     options: [
       { label: 'Tâm trạng ổn định, vui vẻ', points: 0 },
       { label: 'Thỉnh thoảng hơi bực nếu bị làm phiền', points: 1 },
@@ -227,6 +227,56 @@ export const STRESS_QUIZ_QUESTIONS: QuizQuestion[] = [
       { label: 'Đôi lúc có giữ trong lòng nhưng không quá nặng', points: 1 },
       { label: 'Thấy cô đơn, ít ai thực sự hiểu mình', points: 2 },
       { label: 'Hoàn toàn bế tắc, cảm giác như một mình gánh cả thế giới', points: 3 }
+    ]
+  },
+  {
+    id: 6,
+    question: 'Khả năng tập trung nghe giảng trên lớp hoặc khi tự học ở nhà của bạn dạo này ra sao?',
+    options: [
+      { label: 'Tập trung tốt, tiếp thu bài hiệu quả', points: 0 },
+      { label: 'Đôi khi bị xao nhãng nhưng nhanh chóng quay lại được', points: 1 },
+      { label: 'Rất khó tập trung, đầu óc hay trôi dạt lo âu', points: 2 },
+      { label: 'Gần như không thể tập trung nổi, đọc mãi không vào chữ', points: 3 }
+    ]
+  },
+  {
+    id: 7,
+    question: 'Cơ thể bạn có xuất hiện dấu hiệu căng thẳng (như đau đầu, tim đập nhanh, đau bụng, chán ăn hoặc ăn không kiểm soát) không?',
+    options: [
+      { label: 'Cơ thể khỏe mạnh, ăn uống điều độ', points: 0 },
+      { label: 'Thỉnh thoảng hơi mệt nhẹ sau giờ học căng', points: 1 },
+      { label: 'Thường xuyên đau đầu, hồi hộp hoặc rối loạn ăn uống', points: 2 },
+      { label: 'Triệu chứng cơ thể rõ rệt gần như mỗi ngày', points: 3 }
+    ]
+  },
+  {
+    id: 8,
+    question: 'Bạn có hay tự ti, so sánh bản thân với bạn bè đồng trang lứa hoặc chịu áp lực từ mạng xã hội không?',
+    options: [
+      { label: 'Mình tự tin vào giá trị và nhịp độ riêng của bản thân', points: 0 },
+      { label: 'Đôi chút chạnh lòng nhưng nhanh chóng cân bằng lại', points: 1 },
+      { label: 'Khá hay tự trách mình kém cỏi hơn người khác', points: 2 },
+      { label: 'Luôn thấy mình thua kém, vô dụng và sợ bị đánh giá', points: 3 }
+    ]
+  },
+  {
+    id: 9,
+    question: 'Mức độ hứng thú của bạn với những sở thích cá nhân (nghe nhạc, vẽ, thể thao, trò chuyện cùng bạn) hiện tại thế nào?',
+    options: [
+      { label: 'Vẫn hào hứng và tận hưởng các hoạt động yêu thích', points: 0 },
+      { label: 'Ít thời gian hơn trước nhưng vẫn thấy vui khi tham gia', points: 1 },
+      { label: 'Không còn nhiều hứng thú, làm cho có lệ', points: 2 },
+      { label: 'Hoàn toàn chán nản, chẳng muốn làm bất cứ điều gì', points: 3 }
+    ]
+  },
+  {
+    id: 10,
+    question: 'Khi nghĩ về lịch học tập và tương lai sắp tới, cảm giác chủ đạo trong bạn là gì?',
+    options: [
+      { label: 'Bình tĩnh, chủ động và có kế hoạch từng bước', points: 0 },
+      { label: 'Hơi áp lực nhưng vẫn nhìn thấy hướng đi', points: 1 },
+      { label: 'Rất ngột ngạt, sợ hãi mình sẽ thất bại', points: 2 },
+      { label: 'Hoàn toàn quá tải, muốn bỏ cuộc hoặc trốn chạy tất cả', points: 3 }
     ]
   }
 ];

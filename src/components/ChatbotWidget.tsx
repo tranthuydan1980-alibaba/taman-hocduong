@@ -19,15 +19,19 @@ import { ChatMessage } from '../types';
 import { soundEngine } from '../utils/audio';
 
 interface ChatbotWidgetProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
   onOpenEmergency: () => void;
 }
 
-export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ onOpenEmergency }) => {
-  const [isOpen, setIsOpen] = useState(false);
+export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
+  isOpen,
+  onOpenChange,
+  onOpenEmergency
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [hasUnread, setHasUnread] = useState(true);
 
   const initialGreeting: ChatMessage = {
     id: 'msg-init-1',
@@ -52,7 +56,6 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ onOpenEmergency })
   useEffect(() => {
     if (isOpen) {
       scrollToBottom();
-      setHasUnread(false);
     }
   }, [messages, isOpen]);
 
@@ -96,20 +99,17 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ onOpenEmergency })
         };
         setMessages((prev) => [...prev, assistantMsg]);
       } else {
-        throw new Error(data.error || 'Lỗi chatbot');
+        throw new Error(data.error || 'Không thể kết nối tới Tâm An 24/7');
       }
-    } catch (e) {
-      console.warn('Chatbot API error, using compassionate fallback:', e);
-      // Fallback compassionate response
-      setTimeout(() => {
-        const fallbackMsg: ChatMessage = {
-          id: `msg-ai-${Date.now()}`,
-          role: 'assistant',
-          text: 'Tâm An luôn ở đây với bạn 💙. Mọi cảm xúc bạn đang trải qua lúc này đều hoàn toàn xứng đáng được thấu hiểu. Đừng ngần ngại chia sẻ thêm chi tiết nhé, hoặc nếu cần hãy thử bài tập hít thở 4-7-8 để lồng ngực dịu lại nha!',
-          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages((prev) => [...prev, fallbackMsg]);
-      }, 500);
+    } catch (e: any) {
+      console.error('Chatbot API error:', e);
+      const errMsg: ChatMessage = {
+        id: `msg-err-${Date.now()}`,
+        role: 'assistant',
+        text: e?.message || 'Kết nối tới Tâm An 24/7 đang tạm gián đoạn. Bạn vui lòng thử gửi lại tin nhắn sau giây lát nhé!',
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, errMsg]);
     } finally {
       setIsTyping(false);
     }
@@ -123,28 +123,20 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ onOpenEmergency })
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Decorative Owl & Label (non-interactive, cannot be clicked or touched) */}
       {!isOpen && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3">
-          {/* Subtle invitation pill */}
-          <div 
-            onClick={() => setIsOpen(true)}
-            className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 backdrop-blur-md shadow-lg border border-sky-200 text-xs font-bold text-sky-800 cursor-pointer hover:scale-105 transition-all animate-bounce"
-          >
+        <div
+          aria-hidden="true"
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-3 pointer-events-none select-none"
+        >
+          <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-lg border border-sky-200 text-xs font-bold text-sky-800 relative">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             <span>Tâm An 24/7 • Luôn lắng nghe</span>
           </div>
 
-          <button
-            onClick={() => setIsOpen(true)}
-            aria-label="Mở khung chat tư vấn 24/7"
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 text-white shadow-xl shadow-sky-300 hover:scale-110 active:scale-95 transition-all flex items-center justify-center relative cursor-pointer group"
-          >
-            <span className="text-2xl group-hover:rotate-12 transition-transform">🦉</span>
-            {hasUnread && (
-              <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-rose-500 border-2 border-white animate-pulse" />
-            )}
-          </button>
+          <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 text-white shadow-xl shadow-sky-300 flex items-center justify-center relative">
+            <span className="text-2xl">🦉</span>
+          </div>
         </div>
       )}
 
@@ -194,7 +186,7 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ onOpenEmergency })
               </button>
 
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => onOpenChange(false)}
                 title="Đóng chat"
                 className="p-1.5 rounded-xl hover:bg-white/20 text-white transition-all"
               >

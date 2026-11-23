@@ -16,6 +16,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('school');
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [savedModalOpen, setSavedModalOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Saved Advice in LocalStorage
   const [savedAdviceList, setSavedAdviceList] = useState<SavedAdviceItem[]>(() => {
@@ -88,11 +89,7 @@ export default function App() {
             const elem = document.getElementById('mailbox-section');
             if (elem) elem.scrollIntoView({ behavior: 'smooth' });
           }}
-          onOpenChat={() => {
-            // Trigger chat if needed
-            const chatTrigger = document.querySelector('[aria-label="Mở khung chat tư vấn 24/7"]') as HTMLButtonElement;
-            chatTrigger?.click();
-          }}
+          onOpenChat={() => setChatOpen(true)}
         />
 
         {/* Dynamic Main Workspace depending on Tab or Full Flow */}
@@ -120,10 +117,7 @@ export default function App() {
         {activeTab === 'quiz' && (
           <StressQuiz
             onNavigateToMailbox={() => setActiveTab('mailbox')}
-            onNavigateToChat={() => {
-              const chatTrigger = document.querySelector('[aria-label="Mở khung chat tư vấn 24/7"]') as HTMLButtonElement;
-              chatTrigger?.click();
-            }}
+            onNavigateToChat={() => setChatOpen(true)}
           />
         )}
 
@@ -143,7 +137,11 @@ export default function App() {
       </main>
 
       {/* Floating 24/7 Chatbot */}
-      <ChatbotWidget onOpenEmergency={() => setEmergencyOpen(true)} />
+      <ChatbotWidget
+        isOpen={chatOpen}
+        onOpenChange={setChatOpen}
+        onOpenEmergency={() => setEmergencyOpen(true)}
+      />
 
       {/* Modals */}
       <EmergencyModal
